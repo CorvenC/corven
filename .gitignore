@@ -1,0 +1,28 @@
+# Build output
+/bin/
+/dist/
+*.exe
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Panel and docs
+node_modules/
+web/dist/
+docs/site/dist/
+.astro/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
