@@ -1,0 +1,62 @@
+# CI for Corven. Runs on merge requests and on main.
+# Each job calls the same Task targets you run locally, so `task check` passing means CI passes.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+stages:
+  - check
+  - build
+
+variables:
+  GO_IMAGE: golang:1.27
+  TASK_VERSION: v3.54.0
+  GOLANGCI_LINT_VERSION: v2.15.0
+  GOPATH: $CI_PROJECT_DIR/.go
+  GOFLAGS: -mod=readonly
+
+default:
+  image: $GO_IMAGE
+  interruptible: true
+  cache:
+    key:
+      files: [go.mod]
+    paths:
+      - .go/pkg/mod/
+  before_script:
+    - export PATH="$GOPATH/bin:$PATH"
+    - sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin "$TASK_VERSION"
+    - go version && task --version
+
+tidy:
+  stage: check
+  script:
+    - go mod tidy -diff
+
+lint:
+  stage: check
+  script:
+    - curl -fsSL https://golangci-lint.run/install.sh | sh -s -- -b "$GOPATH/bin" "$GOLANGCI_LINT_VERSION"
+    - golangci-lint version
+    - task lint
+
+test:
+  stage: check
+  script:
+    - task test
+
+build:
+  stage: build
+  needs: [tidy, lint, test]
+  script:
+    - task build
+    - ./bin/corven version
+    - ./bin/corven-server --version
+  artifacts:
+    name: corven-$CI_COMMIT_SHORT_SHA
+    paths:
+      - bin/
+    expire_in: 1 week

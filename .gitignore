@@ -29,3 +29,6 @@ Thumbs.db
 
 # Task runner cache
 .task/
+
+# Go cache used by CI (GOPATH inside the project)
+/.go/

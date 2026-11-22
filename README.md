@@ -10,6 +10,8 @@
 <p align="center"><strong>Your own cloud, on your own server.</strong><br>
 Self-hosted, open source deployment platform. Push to deploy on your own VPS.</p>
 
+<p align="center"><a href="https://gitlab.com/corvenc/corven/-/pipelines"><img src="https://gitlab.com/corvenc/corven/badges/main/pipeline.svg" alt="pipeline status"></a></p>
+
 <p align="center"><a href="#en-español">Leer en español</a></p>
 
 ---

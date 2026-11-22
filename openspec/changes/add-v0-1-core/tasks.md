@@ -8,7 +8,7 @@
 ## 1. Walking skeleton (clone → build → run → domain)
 
 - [x] 1.1 Go module, repo layout, Taskfile, golangci-lint config
-- [ ] 1.2 CI pipeline: lint, test, build for Go
+- [x] 1.2 CI pipeline: lint, test, build for Go
 - [ ] 1.3 Docker client through the SDK: build an image from a local folder and run it
 - [ ] 1.4 Clone a public Git repo at a given commit and build it with BuildKit
 - [ ] 1.5 Caddy container with admin API; register a route to a running container
