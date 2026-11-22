@@ -4,9 +4,14 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"gitlab.com/corvenc/corven/internal/source"
 )
 
 // newTestClient connects to the local Docker daemon or skips the test when there is none
@@ -65,6 +70,77 @@ func TestBuildFailureReportsDaemonError(t *testing.T) {
 	_, err := c.Build(ctx, BuildOptions{ContextDir: "testdata/hello", Dockerfile: "missing.Dockerfile", Tag: "corven-test/broken:latest"})
 	if err == nil {
 		t.Fatal("expected an error for a missing Dockerfile")
+	}
+}
+
+func TestFetchAndBuildWithBuildKit(t *testing.T) {
+	c := newTestClient(t)
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	// A local repository holding the test app, fetched like a remote one.
+	repo := t.TempDir()
+	for _, name := range []string{"Dockerfile", "index.html"} {
+		data, err := os.ReadFile(filepath.Join("testdata", "hello", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, repo, "init", "--quiet", "--initial-branch=main")
+	gitRun(t, repo, "add", ".")
+	gitRun(t, repo, "commit", "--quiet", "-m", "app")
+
+	work := filepath.Join(t.TempDir(), "src")
+	sha, err := source.Fetch(ctx, source.FetchOptions{URL: "file://" + filepath.ToSlash(repo), Ref: "main", Dir: work, AllowFileURLs: true})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	var log strings.Builder
+	id, err := c.Build(ctx, BuildOptions{ContextDir: work, Tag: "corven-test/fetched:" + sha[:12], Output: &log})
+	if err != nil {
+		t.Fatalf("Build: %v\n%s", err, log.String())
+	}
+	t.Cleanup(func() { _ = c.RemoveImage(context.Background(), id) })
+
+	// BuildKit progress lines look like "#1 [internal] load build definition from Dockerfile".
+	if !strings.Contains(log.String(), "#1 ") || !strings.Contains(log.String(), "COPY index.html") {
+		t.Errorf("build log does not look like BuildKit progress:\n%s", log.String())
+	}
+}
+
+func TestBuildKitFailingStep(t *testing.T) {
+	c := newTestClient(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM busybox:1.37\nRUN echo boom && false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var log strings.Builder
+	_, err := c.Build(ctx, BuildOptions{ContextDir: dir, Tag: "corven-test/failing:latest", Output: &log})
+	if err == nil {
+		t.Fatalf("expected the build to fail\n%s", log.String())
+	}
+	if !strings.Contains(log.String(), "boom") {
+		t.Errorf("log should include the failing step output:\n%s", log.String())
+	}
+}
+
+func gitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	base := []string{"-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"}
+	cmd := exec.Command("git", append(base, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

@@ -10,7 +10,7 @@
 - [x] 1.1 Go module, repo layout, Taskfile, golangci-lint config
 - [x] 1.2 CI pipeline: lint, test, build for Go
 - [x] 1.3 Docker client through the SDK: build an image from a local folder and run it
-- [ ] 1.4 Clone a public Git repo at a given commit and build it with BuildKit
+- [x] 1.4 Clone a public Git repo at a given commit and build it with BuildKit
 - [ ] 1.5 Caddy container with admin API; register a route to a running container
 - [ ] 1.6 sslip.io hostname with automatic TLS for that route
 - [ ] 1.7 Command `server deploy <git-url>` that does all of the above end to end (throwaway entry point)

@@ -7,8 +7,15 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/moby/moby/api/types/build"
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/moby/moby/client"
+)
+
+// Message IDs the daemon uses for BuildKit output.
+const (
+	auxTrace   = "moby.buildkit.trace" // aux is a base64 BuildKit StatusResponse
+	auxImageID = "moby.image.id"       // aux is {"ID": "sha256:..."}
 )
 
 // BuildOptions describes an image build from a local folder.
@@ -20,7 +27,8 @@ type BuildOptions struct {
 	Output     io.Writer         // receives the build log; nil discards it
 }
 
-// Build builds an image and returns its ID. The build log streams to opts.Output as it happens.
+// Build builds an image with BuildKit and returns its ID. The build log streams to opts.Output
+// as it happens. Layers are cached by the daemon, so rebuilding unchanged steps is fast.
 func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	if opts.ContextDir == "" || opts.Tag == "" {
 		return "", errors.New("build: context dir and tag are required")
@@ -44,6 +52,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		Dockerfile: dockerfile,
 		Labels:     labels(opts.Labels),
 		Remove:     true,
+		Version:    build.BuilderBuildKit,
 	})
 	if err != nil {
 		return "", fmt.Errorf("build %s: %w", opts.Tag, err)
@@ -59,8 +68,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 
 // readBuildStream copies the daemon's JSON build messages to out as plain text,
 // returns the image ID announced at the end, and turns an error message into a Go error.
+// It understands both BuildKit traces and classic builder lines.
 func readBuildStream(body io.Reader, out io.Writer) (string, error) {
 	dec := json.NewDecoder(body)
+	prog := newProgress(out)
 	var id string
 	for {
 		var msg jsonstream.Message
@@ -78,7 +89,17 @@ func readBuildStream(body io.Reader, out io.Writer) (string, error) {
 				return "", fmt.Errorf("write build output: %w", err)
 			}
 		}
-		if msg.Aux != nil {
+		if msg.Aux != nil && msg.ID == auxTrace {
+			var payload []byte // JSON base64 string, decoded by encoding/json
+			if err := json.Unmarshal(*msg.Aux, &payload); err != nil {
+				return "", fmt.Errorf("read build trace: %w", err)
+			}
+			if err := prog.handle(payload); err != nil {
+				return "", err
+			}
+			continue
+		}
+		if msg.Aux != nil && (msg.ID == auxImageID || msg.ID == "") {
 			var aux struct {
 				ID string `json:"ID"`
 			}

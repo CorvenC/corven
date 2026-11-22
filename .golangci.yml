@@ -34,6 +34,9 @@ linters:
       - path: cmd/
         linters: [errcheck]
         text: "fmt.Fprint"
+      # Tests read fixtures and run git with test-controlled arguments.
+      - path: _test\.go
+        linters: [gosec]
 
 formatters:
   enable:
