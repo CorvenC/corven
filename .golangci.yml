@@ -1,0 +1,45 @@
+# golangci-lint v2 configuration: https://golangci-lint.run
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose     # HTTP response bodies are closed
+    - errorlint     # errors are compared and wrapped with errors.Is/As/%w
+    - gocritic      # common bugs and style issues
+    - gosec         # security problems (this project controls servers)
+    - misspell      # typos in comments and strings
+    - nolintlint    # every //nolint has a reason
+    - revive        # idiomatic Go
+    - unconvert     # unnecessary type conversions
+    - unparam       # unused function parameters
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Writing to stdout/stderr in CLI output: a failed print has nowhere to be reported.
+      - path: cmd/
+        linters: [errcheck]
+        text: "fmt.Fprint"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - gitlab.com/corvenc/corven

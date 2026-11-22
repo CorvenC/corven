@@ -1,0 +1,75 @@
+# Task runner for Corven: https://taskfile.dev
+# Run `task` to list everything, `task check` before opening a merge request.
+version: "3"
+
+vars:
+  MODULE: gitlab.com/corvenc/corven
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo none
+  DATE:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  LDFLAGS: >-
+    -s -w
+    -X {{.MODULE}}/internal/version.Version={{.VERSION}}
+    -X {{.MODULE}}/internal/version.Commit={{.COMMIT}}
+    -X {{.MODULE}}/internal/version.Date={{.DATE}}
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the server and the CLI into bin/
+    deps: [build:server, build:cli]
+
+  build:server:
+    desc: Build bin/corven-server
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/corven-server ./cmd/server
+    sources: ["**/*.go", go.mod, go.sum]
+    generates: [bin/corven-server]
+
+  build:cli:
+    desc: Build bin/corven
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/corven ./cmd/cli
+    sources: ["**/*.go", go.mod, go.sum]
+    generates: [bin/corven]
+
+  test:
+    desc: Run all tests with the race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format the code
+    cmds:
+      - golangci-lint fmt ./...
+
+  tidy:
+    desc: Tidy go.mod and go.sum
+    cmds:
+      - go mod tidy
+
+  check:
+    desc: Everything CI runs, in order (tidy check, lint, test, build)
+    cmds:
+      - go mod tidy -diff
+      - task: lint
+      - task: test
+      - task: build
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf bin dist
